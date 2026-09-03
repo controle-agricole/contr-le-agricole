@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Suivi des contrôles agricoles – V8 PWA</title>
+<style>
+:root{--main:#4e8b5f;--dark:#2f6540;--soft:#eaf4ed;--line:#cfd8d1;--text:#243027;--page1:#e5f1e8;--page2:#f8fbf8;--surface:#ffffff;--surface-alpha:#ffffffcc;--field:#ffffff;--muted:#6a776e;--tablehead:#f1f6f2;--subcard:#f7faf7;--overlay:#141e1833}
+body[data-theme="dark"]{--main:#c9785b;--dark:#f1c0a9;--soft:#513229;--line:#704b3e;--text:#f7eee9;--page1:#2c1b17;--page2:#3a241e;--surface:#442b24;--surface-alpha:#442b24f2;--field:#34211c;--muted:#d3b8ab;--tablehead:#54362d;--subcard:#4b3028;--overlay:#160c096e}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:var(--text);background:linear-gradient(135deg,var(--page1),var(--page2) 72%,var(--surface));transition:background .2s ease,color .2s ease}
+header{background:var(--dark);color:#fff;padding:18px 20px;box-shadow:0 3px 10px #0002}header h1{margin:0;font-size:22px}header p{margin:5px 0 0;font-size:13px;opacity:.9}
+nav{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+button{border:1px solid var(--dark);background:var(--main);color:#fff;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer;box-shadow:0 4px 8px #23462d33,inset 0 1px 0 #ffffff44}
+button.secondary{background:var(--surface);color:var(--dark)}button.small{padding:7px 10px;font-size:12px}button.quick{background:var(--soft);color:var(--dark);border-color:#9eb9a5}button.danger{background:#fff;color:#a44;border-color:#c99}
+main{max-width:1150px;margin:auto;padding:18px}.page{display:none}.page.active{display:block}.card{background:var(--surface-alpha);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 3px 10px #1e372318}.card h2,.card h3{margin-top:0;color:var(--dark)}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.field label{display:block;font-size:12px;font-weight:700;margin-bottom:5px;color:#46524a}input,select{width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;background:var(--field);color:var(--text);box-shadow:inset 0 1px 3px #1e322312;font:inherit}
+input:focus,select:focus{outline:none;border-color:var(--main);box-shadow:0 0 0 3px #4e8b5f2e}
+.quickrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.program-row{display:grid;grid-template-columns:1.3fr .7fr 1.4fr auto;gap:8px;align-items:end;padding:10px 0;border-bottom:1px dashed #d9dfda}
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.metric{background:var(--soft);border:1px solid #cfe0d3;border-radius:10px;padding:12px}.metric b{display:block;font-size:20px;color:var(--dark);margin-top:4px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #dce2dd;text-align:left;font-size:13px}th{background:var(--tablehead);color:var(--dark)}
+.muted{color:var(--muted);font-size:12px}.checkline{display:flex;align-items:center;gap:8px;min-height:40px}.checkline input{width:auto;box-shadow:none}.subcard{background:var(--subcard);border:1px solid #d9e3db;border-radius:10px;padding:10px}.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--soft);color:var(--dark);font-size:11px;font-weight:700}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+.excel-preview{display:none;position:fixed;inset:0;background:var(--overlay);z-index:1000;padding:18px;overflow:auto}
+.excel-preview.open{display:block}
+.excel-sheet{max-width:1180px;margin:0 auto;background:var(--surface);border-radius:12px;padding:18px;box-shadow:0 12px 35px rgba(0,0,0,.3)}
+.excel-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:14px;position:sticky;top:0;background:var(--surface);padding-bottom:10px;z-index:2}
+.excel-title{font-size:20px;font-weight:800;color:var(--dark)}
+.excel-note{font-size:12px;color:var(--muted);margin-bottom:12px}
+.excel-table{width:100%;border-collapse:collapse;margin-bottom:18px}
+.excel-table th,.excel-table td{border:1px solid #bfc9c1;padding:7px 8px;font-size:12px;vertical-align:top}
+.excel-table th{background:var(--soft);color:var(--dark);text-align:left}
+.excel-table tfoot td{font-weight:700;background:var(--tablehead)}
+.excel-section{margin-top:18px}
+.excel-section h3{margin:0 0 8px;color:#2f6540}
+@media print{
+  body.print-excel-preview > *:not(#excelPreview){display:none!important}
+  body.print-excel-preview #excelPreview{display:block!important;position:static;background:#fff;padding:0}
+  body.print-excel-preview .excel-sheet{box-shadow:none;max-width:none;border-radius:0;padding:0}
+  body.print-excel-preview .excel-toolbar{display:none}
+}
+
+@media(max-width:800px){.grid,.grid.two,.summary,.program-row{grid-template-columns:1fr}}
+</style>
+
+<meta name="theme-color" content="#c9785b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Contrôles agricoles">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+
+</head>
+<body>
+<header><h1>Suivi des contrôles agricoles</h1><p>V8 installable – PC Windows et iPhone</p></header>
+<nav>
+<button onclick="showPage('journee')">Journée</button>
+<button class="secondary" onclick="showPage('programmes')">Programmes</button>
+<button class="secondary" onclick="showPage('exploitations')">Exploitations</button>
+<button class="secondary" onclick="showPage('resultats')">Résultats</button>
+<button class="secondary" onclick="openExcelPreview()">Aperçu Excel</button>
+<button id="installBtn" class="secondary" style="display:none">Installer l’application</button>
+<button id="themeToggle" class="secondary" onclick="toggleTheme()">🟤 Thème terracotta</button>
+<button class="secondary" onclick="loadDemoDay()">Charger journée fictive</button>
+</nav>
+<main>
+<section id="journee" class="page active">
+<div class="card"><h2>1. Journée de contrôle</h2>
+<p class="muted">Les informations de déplacement et de frais sont rattachées à la journée, et non à un contrôle particulier.</p>
+<div class="grid">
+<div class="field"><label>Date</label><input id="dayDate" type="date"></div>
+<div class="field"><label>N° contrôleur</label><input id="controllerNo" placeholder="ex. 12"></div>
+<div class="field"><label>Genre d'activité</label>
+<select id="activityKind">
+<option value="Contrôle">Contrôle</option>
+<option value="Formation">Formation</option>
+<option value="Séance">Séance</option>
+<option value="Administratif">Administratif</option>
+<option value="Autre">Autre</option>
+</select></div>
+<div class="field"><label>Temps déplacement total (min)</label><input id="travelMin" type="number" min="0" step="5"></div>
+<div class="field"><label>Kilomètres</label><input id="km" type="number" min="0" step="1"></div>
+<div class="field"><label>Repas pris</label><select id="meal"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+<div class="field"><label>Frais téléphone (CHF)</label><input id="phone" type="number" min="0" step="0.05" value="0"></div>
+<div class="field"><label>Divers frais (CHF)</label><input id="miscExpenses" type="number" min="0" step="0.05" value="0"></div>
+<div class="field"><label>Remarque journée</label><input id="dayNote" placeholder="facultatif"></div>
+</div></div>
+
+<div class="card"><h2>2. Contrôles de la journée</h2><p class="muted">Chaque exploitation peut comporter plusieurs programmes. Le temps reste ventilé séparément par programme.</p><div id="controls"></div><div class="actions"><button onclick="addControl()">+ Ajouter un contrôle</button></div></div>
+
+<div class="card"><h2>3. Résultat de la journée</h2>
+<div class="summary">
+<div class="metric">Temps contrôles<b id="sumControl">0 h 00</b></div>
+<div class="metric">Déplacements<b id="sumTravel">0 h 00</b></div>
+<div class="metric">Temps total<b id="sumTotal">0 h 00</b></div>
+<div class="metric">Kilomètres<b id="sumKm">0 km</b></div>
+</div>
+<div id="programTotals" style="margin-top:12px"></div>
+<div class="card" style="background:var(--subcard);margin-top:14px;margin-bottom:0">
+<h3>Préparation du décompte Excel</h3>
+<p class="muted" style="margin-bottom:0">La V2 conserve séparément les informations nécessaires au futur remplissage automatique : contrôleur, activité, exploitations, programmes, temps, déplacement, kilomètres, repas, frais, contrôles accompagnés, deuxième contrôleur et remarques.</p>
+</div>
+<div class="actions"><button onclick="saveDay()">Enregistrer la journée</button><button class="secondary" onclick="resetDay()">Nouvelle journée</button></div>
+</div>
+</section>
+
+<section id="programmes" class="page"><div class="card"><h2>Programmes de contrôle</h2><p class="muted">Liste permanente et modifiable.</p>
+<div class="grid two"><div class="field"><label>Nouveau programme</label><input id="newProgram" placeholder="Ex. Biodiversité"></div>
+<div class="field"><label>Famille</label><select id="newProgramFamily"><option>Programme</option><option>Label</option></select></div></div>
+<div class="actions"><button onclick="addProgram()">Ajouter</button></div><div id="programList" style="margin-top:14px"></div></div></section>
+
+<section id="exploitations" class="page"><div class="card"><h2>Exploitations</h2>
+<div class="grid">
+<div class="field"><label>Nom de l'exploitation</label><input id="newFarm"></div>
+<div class="field"><label>N° cantonal de l'exploitation</label><input id="newFarmCantonalNo" placeholder="N° cantonal"></div>
+<div class="field"><label>Localité</label><input id="newFarmTown"></div>
+</div>
+<div class="actions"><button onclick="addFarm()">Ajouter</button></div><div id="farmList" style="margin-top:14px"></div></div></section>
+
+<section id="resultats" class="page"><div class="card"><h2>Résultats enregistrés</h2><div id="savedDays"></div></div></section>
+</main>
+
+<script>
+const K={programs:"ctrl_agri_programs_v1",farms:"ctrl_agri_farms_v1",days:"ctrl_agri_days_v1"};
+const THEME_K="ctrl_agri_theme_v1";
+function applyTheme(theme){
+  document.body.dataset.theme=theme;
+  localStorage.setItem(THEME_K,theme);
+  const b=document.getElementById("themeToggle");
+  if(b)b.textContent=theme==="dark"?"☀️ Thème clair":"🟤 Thème terracotta";
+}
+function toggleTheme(){
+  applyTheme(document.body.dataset.theme==="dark"?"light":"dark");
+}
+let programs=JSON.parse(localStorage.getItem(K.programs)||"null")||[
+{id:"per",name:"PER",family:"Programme",active:true},
+{id:"sst",name:"SST",family:"Programme",active:true},
+{id:"srpa",name:"SRPA",family:"Programme",active:true},
+{id:"agrosolution",name:"Agrosolution",family:"Label",active:true},
+{id:"ipsuisse",name:"IP-Suisse",family:"Label",active:true}
+];
+let farms=JSON.parse(localStorage.getItem(K.farms)||"[]");
+let days=JSON.parse(localStorage.getItem(K.days)||"[]");
+let controls=[];
+function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
+function fmtMin(m){m=Number(m)||0;return Math.floor(m/60)+" h "+String(m%60).padStart(2,"0")}
+function persist(){localStorage.setItem(K.programs,JSON.stringify(programs));localStorage.setItem(K.farms,JSON.stringify(farms));localStorage.setItem(K.days,JSON.stringify(days))}
+function showPage(id){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");if(id==="programmes")renderPrograms();if(id==="exploitations")renderFarms();if(id==="resultats")renderResults()}
+function addProgram(){let name=newProgram.value.trim();if(!name)return;programs.push({id:uid(),name,family:newProgramFamily.value,active:true});newProgram.value="";persist();renderPrograms();renderControls()}
+function renderPrograms(){programList.innerHTML="<table><tr><th>Nom</th><th>Famille</th><th></th></tr>"+programs.map(p=>"<tr><td><b>"+p.name+"</b></td><td>"+p.family+"</td><td><button class='small danger' onclick=\"toggleProgram('"+p.id+"')\">"+(p.active?"Désactiver":"Réactiver")+"</button></td></tr>").join("")+"</table>"}
+function toggleProgram(id){let p=programs.find(x=>x.id===id);if(p)p.active=!p.active;persist();renderPrograms();renderControls()}
+function addFarm(){let name=newFarm.value.trim();if(!name)return;farms.push({id:uid(),name,cantonalNo:newFarmCantonalNo.value.trim(),town:newFarmTown.value.trim()});newFarm.value="";newFarmCantonalNo.value="";newFarmTown.value="";persist();renderFarms();renderControls()}
+function renderFarms(){farmList.innerHTML=farms.length?"<table><tr><th>Exploitation</th><th>N° cantonal</th><th>Localité</th></tr>"+farms.map(f=>"<tr><td><b>"+f.name+"</b></td><td>"+(f.cantonalNo||"—")+"</td><td>"+(f.town||"—")+"</td></tr>").join("")+"</table>":"<p class='muted'>Aucune exploitation enregistrée.</p>"}
+function addControl(){controls.push({id:uid(),farmId:"",note:"",times:{},accompanied:false,secondController:""});renderControls()}
+function removeControl(id){controls=controls.filter(c=>c.id!==id);renderControls()}
+function setFarm(cid,v){let c=controls.find(x=>x.id===cid);if(c)c.farmId=v}
+function setNote(cid,v){let c=controls.find(x=>x.id===cid);if(c)c.note=v}
+function setAccompanied(cid,v){let c=controls.find(x=>x.id===cid);if(c)c.accompanied=v;renderControls()}
+function setSecondController(cid,v){let c=controls.find(x=>x.id===cid);if(c)c.secondController=v}
+function addMinutes(cid,pid,min){let c=controls.find(x=>x.id===cid);if(!c)return;c.times[pid]=(Number(c.times[pid])||0)+min;renderControls()}
+function setMinutes(cid,pid,v){let c=controls.find(x=>x.id===cid);if(c)c.times[pid]=Math.max(0,Number(v)||0);updateSummary()}
+function renderControls(){
+if(!controls.length){controlsEl.innerHTML="<p class='muted'>Aucun contrôle ajouté.</p>";updateSummary();return}
+let farmOpts="<option value=''>— choisir —</option>"+farms.map(f=>"<option value='"+f.id+"'>"+f.name+(f.cantonalNo?" – N° "+f.cantonalNo:"")+(f.town?" – "+f.town:"")+"</option>").join("");
+controlsEl.innerHTML=controls.map((c,i)=>"<div class='card' style='background:var(--subcard)'><div style='display:flex;justify-content:space-between;align-items:center'><h3>Contrôle "+(i+1)+"</h3><button class='small danger' onclick=\"removeControl('"+c.id+"')\">Supprimer</button></div><div class='grid two'><div class='field'><label>Exploitation</label><select data-control='"+c.id+"' onchange=\"setFarm('"+c.id+"',this.value)\">"+farmOpts+"</select></div><div class='field'><label>Remarque contrôle</label><input value='"+(c.note||"")+"' oninput=\"setNote('"+c.id+"',this.value)\"></div><div class='subcard'><label class='checkline'><input type='checkbox' "+(c.accompanied?"checked":"")+" onchange=\"setAccompanied('"+c.id+"',this.checked)\"> Contrôle accompagné</label></div><div class='field'><label>Deuxième contrôleur</label><input "+(c.accompanied?"":"disabled")+" value='"+(c.secondController||"")+"' oninput=\"setSecondController('"+c.id+"',this.value)\" placeholder='nom ou n°'></div></div><h3 style='margin-top:16px'>Répartition du temps</h3>"+
+programs.filter(p=>p.active).map(p=>"<div class='program-row'><div><b>"+p.name+"</b><div class='muted'>"+p.family+"</div></div><div class='field'><label>Minutes</label><input type='number' min='0' step='5' value='"+(c.times[p.id]||0)+"' oninput=\"setMinutes('"+c.id+"','"+p.id+"',this.value)\"></div><div><div class='quickrow'><button class='small quick' onclick=\"addMinutes('"+c.id+"','"+p.id+"',15)\">+15</button><button class='small quick' onclick=\"addMinutes('"+c.id+"','"+p.id+"',30)\">+30</button><button class='small quick' onclick=\"addMinutes('"+c.id+"','"+p.id+"',45)\">+45</button><button class='small quick' onclick=\"addMinutes('"+c.id+"','"+p.id+"',60)\">+1 h</button></div></div><div><b>"+fmtMin(c.times[p.id]||0)+"</b></div></div>").join("")+
+"<div style='margin-top:10px;text-align:right'><b>Total contrôle : "+fmtMin(Object.values(c.times).reduce((a,b)=>a+(Number(b)||0),0))+"</b></div></div>").join("");
+controls.forEach(c=>{if(c.accompanied==null)c.accompanied=false;if(c.secondController==null)c.secondController="";let s=document.querySelector("select[data-control='"+c.id+"']");if(s)s.value=c.farmId||""});updateSummary()}
+const controlsEl=document.getElementById("controls");
+function updateSummary(){let cm=controls.reduce((s,c)=>s+Object.values(c.times).reduce((a,b)=>a+(Number(b)||0),0),0),tm=Number(travelMin.value)||0;sumControl.textContent=fmtMin(cm);sumTravel.textContent=fmtMin(tm);sumTotal.textContent=fmtMin(cm+tm);sumKm.textContent=(Number(km.value)||0)+" km";let sums={};controls.forEach(c=>Object.entries(c.times).forEach(([p,m])=>sums[p]=(sums[p]||0)+(Number(m)||0)));programTotals.innerHTML=programs.filter(p=>(sums[p.id]||0)>0).map(p=>"<span class='badge' style='margin:3px'>"+p.name+": "+fmtMin(sums[p.id])+"</span>").join("")||"<span class='muted'>La ventilation par programme apparaîtra ici.</span>"}
+["controllerNo","activityKind","travelMin","km","meal","phone","miscExpenses","dayNote"].forEach(id=>document.getElementById(id).addEventListener("input",updateSummary));
+function saveDay(){if(!dayDate.value){alert("Veuillez choisir la date.");return}days.push({id:uid(),date:dayDate.value,controllerNo:controllerNo.value.trim(),activityKind:activityKind.value,travelMin:Number(travelMin.value)||0,km:Number(km.value)||0,meal:meal.value,phone:Number(phone.value)||0,miscExpenses:Number(miscExpenses.value)||0,note:dayNote.value.trim(),controls:JSON.parse(JSON.stringify(controls))});persist();alert("Journée enregistrée.")}
+function resetDay(){controls=[];controllerNo.value="";activityKind.value="Contrôle";travelMin.value="";km.value="";meal.value="non";phone.value="0";miscExpenses.value="0";dayNote.value="";dayDate.value=new Date().toISOString().slice(0,10);addControl()}
+function renderResults(){savedDays.innerHTML=days.length?days.slice().reverse().map(d=>{let cm=d.controls.reduce((s,c)=>s+Object.values(c.times||{}).reduce((a,b)=>a+(Number(b)||0),0),0);let accompanied=(d.controls||[]).filter(c=>c.accompanied).length;let farmsCount=new Set((d.controls||[]).map(c=>c.farmId).filter(Boolean)).size;return "<div class='card'><h3>"+d.date+" <span class='badge'>"+(d.activityKind||"Contrôle")+"</span></h3><p><b>N° contrôleur :</b> "+(d.controllerNo||"—")+" &nbsp; • &nbsp; <b>Exploitations visitées :</b> "+farmsCount+" &nbsp; • &nbsp; <b>Contrôles accompagnés :</b> "+accompanied+"</p><div class='summary'><div class='metric'>Contrôles<b>"+fmtMin(cm)+"</b></div><div class='metric'>Déplacements<b>"+fmtMin(d.travelMin)+"</b></div><div class='metric'>Total<b>"+fmtMin(cm+d.travelMin)+"</b></div><div class='metric'>Distance<b>"+d.km+" km</b></div></div><p><b>Repas :</b> "+(d.meal==="oui"?"Oui":"Non")+" &nbsp; • &nbsp; <b>Téléphone :</b> CHF "+Number(d.phone||0).toFixed(2)+" &nbsp; • &nbsp; <b>Divers :</b> CHF "+Number(d.miscExpenses||0).toFixed(2)+"</p></div>"}).join(""):"<p class='muted'>Aucune journée enregistrée.</p>"}
+
+
+function esc(v){
+  return String(v==null?"":v)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;").replaceAll('"',"&quot;");
+}
+function currentDayObject(){
+  return {
+    date:dayDate.value,
+    controllerNo:controllerNo.value.trim(),
+    activityKind:activityKind.value,
+    travelMin:Number(travelMin.value)||0,
+    km:Number(km.value)||0,
+    meal:meal.value,
+    phone:Number(phone.value)||0,
+    miscExpenses:Number(miscExpenses.value)||0,
+    note:dayNote.value.trim(),
+    controls:JSON.parse(JSON.stringify(controls))
+  };
+}
+function openExcelPreview(){
+  const d=currentDayObject();
+  const ctrlRows=[];
+  let totalControl=0;
+  (d.controls||[]).forEach(c=>{
+    const f=farms.find(x=>x.id===c.farmId)||{};
+    Object.entries(c.times||{}).forEach(([pid,min])=>{
+      min=Number(min)||0;
+      if(min<=0)return;
+      totalControl+=min;
+      const p=programs.find(x=>x.id===pid)||{name:pid,family:""};
+      ctrlRows.push({
+        farm:f.name||"—",
+        cantonalNo:f.cantonalNo||"—",
+        town:f.town||"—",
+        program:p.name||pid,
+        family:p.family||"",
+        minutes:min,
+        accompanied:!!c.accompanied,
+        secondController:c.secondController||"",
+        note:c.note||""
+      });
+    });
+  });
+
+  const rowsHtml=ctrlRows.length?ctrlRows.map(r=>`
+    <tr>
+      <td>${esc(r.farm)}</td>
+      <td>${esc(r.cantonalNo)}</td>
+      <td>${esc(r.town)}</td>
+      <td>${esc(r.program)}</td>
+      <td>${esc(r.family)}</td>
+      <td>${esc(fmtMin(r.minutes))}</td>
+      <td>${r.accompanied?"Oui":"Non"}</td>
+      <td>${esc(r.secondController||"—")}</td>
+      <td>${esc(r.note||"—")}</td>
+    </tr>`).join(""):`<tr><td colspan="9">Aucun temps de contrôle saisi.</td></tr>`;
+
+  const sums={};
+  ctrlRows.forEach(r=>sums[r.program]=(sums[r.program]||0)+r.minutes);
+  const recapRows=Object.entries(sums).map(([name,min])=>`<tr><td>${esc(name)}</td><td>${esc(fmtMin(min))}</td></tr>`).join("")||`<tr><td colspan="2">Aucun programme saisi.</td></tr>`;
+
+  excelPreviewContent.innerHTML=`
+    <div class="excel-note">Cet aperçu est généré directement à partir de la journée actuellement affichée dans l'application.</div>
+    <div class="excel-section">
+      <h3>Journée</h3>
+      <table class="excel-table">
+        <tr><th>Date</th><td>${esc(d.date||"—")}</td><th>N° contrôleur</th><td>${esc(d.controllerNo||"—")}</td></tr>
+        <tr><th>Genre d'activité</th><td>${esc(d.activityKind||"—")}</td><th>Exploitations visitées</th><td>${new Set((d.controls||[]).map(c=>c.farmId).filter(Boolean)).size}</td></tr>
+        <tr><th>Temps contrôles</th><td>${fmtMin(totalControl)}</td><th>Déplacement</th><td>${fmtMin(d.travelMin)}</td></tr>
+        <tr><th>Temps total</th><td>${fmtMin(totalControl+d.travelMin)}</td><th>Kilomètres</th><td>${Number(d.km||0)} km</td></tr>
+        <tr><th>Repas</th><td>${d.meal==="oui"?"Oui":"Non"}</td><th>Téléphone</th><td>CHF ${Number(d.phone||0).toFixed(2)}</td></tr>
+        <tr><th>Divers frais</th><td>CHF ${Number(d.miscExpenses||0).toFixed(2)}</td><th>Remarque journée</th><td>${esc(d.note||"—")}</td></tr>
+      </table>
+    </div>
+
+    <div class="excel-section">
+      <h3>Détail des contrôles par exploitation</h3>
+      <table class="excel-table">
+        <thead><tr>
+          <th>Exploitation</th><th>N° cantonal</th><th>Localité</th><th>Programme</th><th>Famille</th>
+          <th>Temps</th><th>Accompagné</th><th>2e contrôleur</th><th>Remarque</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+        <tfoot><tr><td colspan="5">Total contrôles</td><td>${fmtMin(totalControl)}</td><td colspan="3"></td></tr></tfoot>
+      </table>
+    </div>
+
+    <div class="excel-section">
+      <h3>Récapitulatif par programme</h3>
+      <table class="excel-table">
+        <thead><tr><th>Programme</th><th>Temps total</th></tr></thead>
+        <tbody>${recapRows}</tbody>
+      </table>
+    </div>`;
+  excelPreview.classList.add("open");
+  excelPreview.setAttribute("aria-hidden","false");
+}
+function closeExcelPreview(){
+  excelPreview.classList.remove("open");
+  excelPreview.setAttribute("aria-hidden","true");
+}
+function printExcelPreview(){
+  document.body.classList.add("print-excel-preview");
+  window.print();
+  setTimeout(()=>document.body.classList.remove("print-excel-preview"),200);
+}
+
+function loadDemoDay(){
+  // Exploitations fictives utilisées pour l'essai
+  const demoFarms=[
+    {id:"demo_farm_1",name:"Domaine des Prés",cantonalNo:"VD-10234",town:"Penthéréaz"},
+    {id:"demo_farm_2",name:"Ferme du Moulin",cantonalNo:"VD-20451",town:"Echallens"},
+    {id:"demo_farm_3",name:"Exploitation des Collines",cantonalNo:"VD-31877",town:"Assens"}
+  ];
+  demoFarms.forEach(df=>{
+    if(!farms.some(f=>f.id===df.id || (f.cantonalNo && f.cantonalNo===df.cantonalNo))) farms.push(df);
+  });
+  persist();
+
+  dayDate.value="2026-09-03";
+  controllerNo.value="17";
+  activityKind.value="Contrôle";
+  travelMin.value="95";
+  km.value="126";
+  meal.value="oui";
+  phone.value="5";
+  miscExpenses.value="12.50";
+  dayNote.value="Journée fictive de démonstration – 3 exploitations contrôlées.";
+
+  controls=[
+    {
+      id:"demo_ctrl_1",
+      farmId:"demo_farm_1",
+      note:"Contrôle fictif – matin",
+      accompanied:false,
+      secondController:"",
+      times:{
+        per:90,
+        ipsuisse:45
+      }
+    },
+    {
+      id:"demo_ctrl_2",
+      farmId:"demo_farm_2",
+      note:"Contrôle fictif – milieu de journée",
+      accompanied:true,
+      secondController:"Contrôleur 24",
+      times:{
+        per:60,
+        srpa:30,
+        agrosolution:30
+      }
+    },
+    {
+      id:"demo_ctrl_3",
+      farmId:"demo_farm_3",
+      note:"Contrôle fictif – après-midi",
+      accompanied:false,
+      secondController:"",
+      times:{
+        sst:45,
+        ipsuisse:60,
+        agrosolution:30
+      }
+    }
+  ];
+
+  renderControls();
+  renderFarms();
+  updateSummary();
+  showPage("journee");
+}
+
+applyTheme(localStorage.getItem(THEME_K)||"light");dayDate.value=new Date().toISOString().slice(0,10);addControl();renderPrograms();renderFarms();renderResults();
+
+let deferredInstallPrompt=null;
+window.addEventListener("beforeinstallprompt",(e)=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  const b=document.getElementById("installBtn");
+  if(b)b.style.display="";
+});
+document.addEventListener("click",async(e)=>{
+  if(e.target && e.target.id==="installBtn" && deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt=null;
+    e.target.style.display="none";
+  }
+});
+window.addEventListener("appinstalled",()=>{
+  const b=document.getElementById("installBtn");
+  if(b)b.style.display="none";
+});
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./service-worker.js").catch(console.error);
+  });
+}
+
+</script>
+
+<div id="excelPreview" class="excel-preview" aria-hidden="true">
+  <div class="excel-sheet">
+    <div class="excel-toolbar">
+      <div>
+        <div class="excel-title">Aperçu du fichier Excel</div>
+        <div class="muted">Présentation du futur export « Détail par exploitation »</div>
+      </div>
+      <div class="actions" style="margin:0">
+        <button class="secondary" onclick="printExcelPreview()">Imprimer l'aperçu</button>
+        <button onclick="closeExcelPreview()">Fermer</button>
+      </div>
+    </div>
+    <div id="excelPreviewContent"></div>
+  </div>
+</div>
+
+
+<div id="iosInstallHint" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;z-index:1200;
+background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+box-shadow:0 8px 28px rgba(0,0,0,.22);font-size:13px">
+  <strong>Installation sur iPhone :</strong> ouvrez ce site dans Safari, touchez <strong>Partager</strong>,
+  puis <strong>Ajouter à l’écran d’accueil</strong>.
+  <button onclick="this.parentElement.style.display='none';localStorage.setItem('ctrl_agri_ios_hint_seen','1')"
+    style="float:right;margin-left:10px">OK</button>
+</div>
+<script>
+(function(){
+  const ua=navigator.userAgent||"";
+  const isiOS=/iPhone|iPad|iPod/i.test(ua);
+  const standalone=window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+  if(isiOS && !standalone && !localStorage.getItem("ctrl_agri_ios_hint_seen")){
+    const h=document.getElementById("iosInstallHint");
+    if(h)h.style.display="block";
+  }
+})();
+</script>
+
+</body>
+</html>

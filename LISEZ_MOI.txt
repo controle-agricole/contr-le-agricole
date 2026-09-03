@@ -1,0 +1,38 @@
+VERSION V8 PWA – INSTALLABLE PC WINDOWS + IPHONE
+
+CONTENU
+- index.html : application
+- manifest.webmanifest : installation PWA
+- service-worker.js : fonctionnement hors ligne
+- icons/ : icônes de l'application
+- DEMARRER_APPLICATION.bat : lancement facile sous Windows
+- serveur_local.ps1 : petit serveur local Windows
+
+INSTALLATION SUR PC WINDOWS
+1. Décompressez le dossier ZIP dans un emplacement permanent, par exemple :
+   C:\Applications\ControlesAgricoles
+2. Double-cliquez sur DEMARRER_APPLICATION.bat.
+3. Votre navigateur s'ouvre sur http://localhost:8765/
+4. Dans Edge ou Chrome, utilisez le bouton « Installer l’application » s'il apparaît,
+   ou le menu du navigateur > Installer cette application.
+5. Une fois installée, l'application peut être lancée comme une application Windows.
+
+INSTALLATION SUR IPHONE
+Pour être installable avec fonctionnement hors ligne, la PWA doit être ouverte depuis
+une adresse HTTPS accessible à l'iPhone. La version V8 est prête pour cela.
+Une fois mise en ligne :
+1. Ouvrir l'adresse dans Safari.
+2. Toucher Partager.
+3. Choisir « Ajouter à l’écran d’accueil ».
+4. L'application s'ouvre ensuite comme une application.
+
+IMPORTANT – ÉTAPE 1
+- Les données restent stockées localement sur chaque appareil.
+- PC et iPhone ne sont PAS encore synchronisés entre eux.
+- La synchronisation commune sera ajoutée à l'étape 2.
+- Toutes les fonctions validées de la V7 sont conservées.
+
+THÈMES
+- Thème clair
+- Thème brun terracotta
+- Le choix est mémorisé localement.
