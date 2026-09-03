@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Suivi des contrôles agricoles – V8 PWA</title>
+<title>Suivi des contrôles agricoles – V9 Sync auto</title>
 <style>
 :root{--main:#4e8b5f;--dark:#2f6540;--soft:#eaf4ed;--line:#cfd8d1;--text:#243027;--page1:#e5f1e8;--page2:#f8fbf8;--surface:#ffffff;--surface-alpha:#ffffffcc;--field:#ffffff;--muted:#6a776e;--tablehead:#f1f6f2;--subcard:#f7faf7;--overlay:#141e1833}
 body[data-theme="dark"]{--main:#c9785b;--dark:#f1c0a9;--soft:#513229;--line:#704b3e;--text:#f7eee9;--page1:#2c1b17;--page2:#3a241e;--surface:#442b24;--surface-alpha:#442b24f2;--field:#34211c;--muted:#d3b8ab;--tablehead:#54362d;--subcard:#4b3028;--overlay:#160c096e}
@@ -40,6 +40,15 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px so
   body.print-excel-preview .excel-toolbar{display:none}
 }
 
+
+.syncbar{max-width:1150px;margin:12px auto 0;padding:0 18px}
+.syncbox{background:var(--surface-alpha);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:0 3px 10px #1e372318;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.syncstatus{font-size:12px;color:var(--muted)}
+.sync-ok{color:var(--dark);font-weight:700}
+.sync-warn{color:#9a6700;font-weight:700}
+.sync-error{color:#a44;font-weight:700}
+@media(max-width:800px){.syncbar{padding:0 12px}}
+
 @media(max-width:800px){.grid,.grid.two,.summary,.program-row{grid-template-columns:1fr}}
 </style>
 
@@ -53,7 +62,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px so
 
 </head>
 <body>
-<header><h1>Suivi des contrôles agricoles</h1><p>V8 installable – PC Windows et iPhone</p></header>
+<header><h1>Suivi des contrôles agricoles</h1><p>V9 synchronisée automatiquement – PC Windows et iPhone</p></header>
 <nav>
 <button onclick="showPage('journee')">Journée</button>
 <button class="secondary" onclick="showPage('programmes')">Programmes</button>
@@ -64,6 +73,14 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px so
 <button id="themeToggle" class="secondary" onclick="toggleTheme()">🟤 Thème terracotta</button>
 <button class="secondary" onclick="loadDemoDay()">Charger journée fictive</button>
 </nav>
+
+<div class="syncbar">
+  <div class="syncbox">
+    <div id="cloudStatus" class="syncstatus">Synchronisation : configuration Supabase à terminer.</div>
+    <button id="syncBtn" class="small secondary" onclick="syncNow()" disabled>Synchroniser maintenant</button>
+  </div>
+</div>
+
 <main>
 <section id="journee" class="page active">
 <div class="card"><h2>1. Journée de contrôle</h2>
@@ -121,6 +138,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px so
 <section id="resultats" class="page"><div class="card"><h2>Résultats enregistrés</h2><div id="savedDays"></div></div></section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const K={programs:"ctrl_agri_programs_v1",farms:"ctrl_agri_farms_v1",days:"ctrl_agri_days_v1"};
 const THEME_K="ctrl_agri_theme_v1";
@@ -145,12 +163,13 @@ let days=JSON.parse(localStorage.getItem(K.days)||"[]");
 let controls=[];
 function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
 function fmtMin(m){m=Number(m)||0;return Math.floor(m/60)+" h "+String(m%60).padStart(2,"0")}
-function persist(){localStorage.setItem(K.programs,JSON.stringify(programs));localStorage.setItem(K.farms,JSON.stringify(farms));localStorage.setItem(K.days,JSON.stringify(days))}
+function persistLocalOnly(){localStorage.setItem(K.programs,JSON.stringify(programs));localStorage.setItem(K.farms,JSON.stringify(farms));localStorage.setItem(K.days,JSON.stringify(days))}
+function persist(){persistLocalOnly();queueCloudSync()}
 function showPage(id){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");if(id==="programmes")renderPrograms();if(id==="exploitations")renderFarms();if(id==="resultats")renderResults()}
-function addProgram(){let name=newProgram.value.trim();if(!name)return;programs.push({id:uid(),name,family:newProgramFamily.value,active:true});newProgram.value="";persist();renderPrograms();renderControls()}
+function addProgram(){let name=newProgram.value.trim();if(!name)return;programs.push({id:uid(),name,family:newProgramFamily.value,active:true,updatedAt:new Date().toISOString()});newProgram.value="";persist();renderPrograms();renderControls()}
 function renderPrograms(){programList.innerHTML="<table><tr><th>Nom</th><th>Famille</th><th></th></tr>"+programs.map(p=>"<tr><td><b>"+p.name+"</b></td><td>"+p.family+"</td><td><button class='small danger' onclick=\"toggleProgram('"+p.id+"')\">"+(p.active?"Désactiver":"Réactiver")+"</button></td></tr>").join("")+"</table>"}
-function toggleProgram(id){let p=programs.find(x=>x.id===id);if(p)p.active=!p.active;persist();renderPrograms();renderControls()}
-function addFarm(){let name=newFarm.value.trim();if(!name)return;farms.push({id:uid(),name,cantonalNo:newFarmCantonalNo.value.trim(),town:newFarmTown.value.trim()});newFarm.value="";newFarmCantonalNo.value="";newFarmTown.value="";persist();renderFarms();renderControls()}
+function toggleProgram(id){let p=programs.find(x=>x.id===id);if(p){p.active=!p.active;p.updatedAt=new Date().toISOString()}persist();renderPrograms();renderControls()}
+function addFarm(){let name=newFarm.value.trim();if(!name)return;farms.push({id:uid(),name,cantonalNo:newFarmCantonalNo.value.trim(),town:newFarmTown.value.trim(),updatedAt:new Date().toISOString()});newFarm.value="";newFarmCantonalNo.value="";newFarmTown.value="";persist();renderFarms();renderControls()}
 function renderFarms(){farmList.innerHTML=farms.length?"<table><tr><th>Exploitation</th><th>N° cantonal</th><th>Localité</th></tr>"+farms.map(f=>"<tr><td><b>"+f.name+"</b></td><td>"+(f.cantonalNo||"—")+"</td><td>"+(f.town||"—")+"</td></tr>").join("")+"</table>":"<p class='muted'>Aucune exploitation enregistrée.</p>"}
 function addControl(){controls.push({id:uid(),farmId:"",note:"",times:{},accompanied:false,secondController:""});renderControls()}
 function removeControl(id){controls=controls.filter(c=>c.id!==id);renderControls()}
@@ -170,7 +189,7 @@ controls.forEach(c=>{if(c.accompanied==null)c.accompanied=false;if(c.secondContr
 const controlsEl=document.getElementById("controls");
 function updateSummary(){let cm=controls.reduce((s,c)=>s+Object.values(c.times).reduce((a,b)=>a+(Number(b)||0),0),0),tm=Number(travelMin.value)||0;sumControl.textContent=fmtMin(cm);sumTravel.textContent=fmtMin(tm);sumTotal.textContent=fmtMin(cm+tm);sumKm.textContent=(Number(km.value)||0)+" km";let sums={};controls.forEach(c=>Object.entries(c.times).forEach(([p,m])=>sums[p]=(sums[p]||0)+(Number(m)||0)));programTotals.innerHTML=programs.filter(p=>(sums[p.id]||0)>0).map(p=>"<span class='badge' style='margin:3px'>"+p.name+": "+fmtMin(sums[p.id])+"</span>").join("")||"<span class='muted'>La ventilation par programme apparaîtra ici.</span>"}
 ["controllerNo","activityKind","travelMin","km","meal","phone","miscExpenses","dayNote"].forEach(id=>document.getElementById(id).addEventListener("input",updateSummary));
-function saveDay(){if(!dayDate.value){alert("Veuillez choisir la date.");return}days.push({id:uid(),date:dayDate.value,controllerNo:controllerNo.value.trim(),activityKind:activityKind.value,travelMin:Number(travelMin.value)||0,km:Number(km.value)||0,meal:meal.value,phone:Number(phone.value)||0,miscExpenses:Number(miscExpenses.value)||0,note:dayNote.value.trim(),controls:JSON.parse(JSON.stringify(controls))});persist();alert("Journée enregistrée.")}
+function saveDay(){if(!dayDate.value){alert("Veuillez choisir la date.");return}days.push({id:uid(),date:dayDate.value,controllerNo:controllerNo.value.trim(),activityKind:activityKind.value,travelMin:Number(travelMin.value)||0,km:Number(km.value)||0,meal:meal.value,phone:Number(phone.value)||0,miscExpenses:Number(miscExpenses.value)||0,note:dayNote.value.trim(),controls:JSON.parse(JSON.stringify(controls)),updatedAt:new Date().toISOString()});persist();alert("Journée enregistrée. La synchronisation se fait automatiquement.")}
 function resetDay(){controls=[];controllerNo.value="";activityKind.value="Contrôle";travelMin.value="";km.value="";meal.value="non";phone.value="0";miscExpenses.value="0";dayNote.value="";dayDate.value=new Date().toISOString().slice(0,10);addControl()}
 function renderResults(){savedDays.innerHTML=days.length?days.slice().reverse().map(d=>{let cm=d.controls.reduce((s,c)=>s+Object.values(c.times||{}).reduce((a,b)=>a+(Number(b)||0),0),0);let accompanied=(d.controls||[]).filter(c=>c.accompanied).length;let farmsCount=new Set((d.controls||[]).map(c=>c.farmId).filter(Boolean)).size;return "<div class='card'><h3>"+d.date+" <span class='badge'>"+(d.activityKind||"Contrôle")+"</span></h3><p><b>N° contrôleur :</b> "+(d.controllerNo||"—")+" &nbsp; • &nbsp; <b>Exploitations visitées :</b> "+farmsCount+" &nbsp; • &nbsp; <b>Contrôles accompagnés :</b> "+accompanied+"</p><div class='summary'><div class='metric'>Contrôles<b>"+fmtMin(cm)+"</b></div><div class='metric'>Déplacements<b>"+fmtMin(d.travelMin)+"</b></div><div class='metric'>Total<b>"+fmtMin(cm+d.travelMin)+"</b></div><div class='metric'>Distance<b>"+d.km+" km</b></div></div><p><b>Repas :</b> "+(d.meal==="oui"?"Oui":"Non")+" &nbsp; • &nbsp; <b>Téléphone :</b> CHF "+Number(d.phone||0).toFixed(2)+" &nbsp; • &nbsp; <b>Divers :</b> CHF "+Number(d.miscExpenses||0).toFixed(2)+"</p></div>"}).join(""):"<p class='muted'>Aucune journée enregistrée.</p>"}
 
@@ -290,7 +309,7 @@ function loadDemoDay(){
     {id:"demo_farm_3",name:"Exploitation des Collines",cantonalNo:"VD-31877",town:"Assens"}
   ];
   demoFarms.forEach(df=>{
-    if(!farms.some(f=>f.id===df.id || (f.cantonalNo && f.cantonalNo===df.cantonalNo))) farms.push(df);
+    if(!farms.some(f=>f.id===df.id || (f.cantonalNo && f.cantonalNo===df.cantonalNo))) farms.push({...df,updatedAt:new Date().toISOString()});
   });
   persist();
 
@@ -348,7 +367,110 @@ function loadDemoDay(){
   showPage("journee");
 }
 
+
+// =========================================================
+// SUPABASE - SYNCHRONISATION AUTOMATIQUE SANS CONNEXION
+// =========================================================
+const SUPABASE_URL="https://gmwbknxyumpocobceavj.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="__COLLER_ICI_LA_PUBLISHABLE_KEY__";
+let sb=null;
+let syncTimer=null;
+let syncing=false;
+let autoPullTimer=null;
+
+function cloudConfigured(){
+  return SUPABASE_PUBLISHABLE_KEY && !SUPABASE_PUBLISHABLE_KEY.includes("__COLLER_ICI");
+}
+function setCloudStatus(message,kind=""){
+  const el=document.getElementById("cloudStatus");
+  if(!el)return;
+  el.className="syncstatus"+(kind?" "+kind:"");
+  el.textContent=message;
+}
+function queueCloudSync(){
+  if(!sb || syncing)return;
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(()=>syncNow(),500);
+}
+function localToDbProgram(p){return {id:p.id,name:p.name,family:p.family||"Programme",active:p.active!==false,updated_at:p.updatedAt||new Date().toISOString()}}
+function dbToLocalProgram(p){return {id:p.id,name:p.name,family:p.family,active:p.active,updatedAt:p.updated_at}}
+function localToDbFarm(f){return {id:f.id,name:f.name,cantonal_no:f.cantonalNo||null,town:f.town||null,updated_at:f.updatedAt||new Date().toISOString()}}
+function dbToLocalFarm(f){return {id:f.id,name:f.name,cantonalNo:f.cantonal_no||"",town:f.town||"",updatedAt:f.updated_at}}
+function localToDbDay(d){return {id:d.id,date:d.date,controller_no:d.controllerNo||null,activity_kind:d.activityKind||"Contrôle",travel_min:Number(d.travelMin)||0,km:Number(d.km)||0,meal:d.meal||"non",phone:Number(d.phone)||0,misc_expenses:Number(d.miscExpenses)||0,note:d.note||null,controls:d.controls||[],updated_at:d.updatedAt||new Date().toISOString()}}
+function dbToLocalDay(d){return {id:d.id,date:d.date,controllerNo:d.controller_no||"",activityKind:d.activity_kind||"Contrôle",travelMin:Number(d.travel_min)||0,km:Number(d.km)||0,meal:d.meal||"non",phone:Number(d.phone)||0,miscExpenses:Number(d.misc_expenses)||0,note:d.note||"",controls:Array.isArray(d.controls)?d.controls:[],updatedAt:d.updated_at}}
+
+function mergeByUpdatedAt(localRows,remoteRows){
+  const map=new Map(remoteRows.map(x=>[x.id,x]));
+  localRows.forEach(l=>{
+    const r=map.get(l.id);
+    if(!r){map.set(l.id,l);return}
+    const lt=Date.parse(l.updatedAt||0)||0, rt=Date.parse(r.updatedAt||0)||0;
+    if(lt>rt)map.set(l.id,l);
+  });
+  return Array.from(map.values()).map(x=>x.updatedAt?x:{...x,updatedAt:new Date().toISOString()});
+}
+
+async function syncNow(){
+  if(!sb){setCloudStatus("Synchronisation non configurée.","sync-warn");return}
+  if(syncing)return;
+  syncing=true;
+  const b=document.getElementById("syncBtn"); if(b)b.disabled=true;
+  setCloudStatus("Synchronisation en cours…");
+  try{
+    const [rp,rf,rd]=await Promise.all([
+      sb.from("programs").select("*"),
+      sb.from("farms").select("*"),
+      sb.from("days").select("*")
+    ]);
+    for(const r of [rp,rf,rd])if(r.error)throw r.error;
+
+    const mergedPrograms=mergeByUpdatedAt(programs,(rp.data||[]).map(dbToLocalProgram));
+    const mergedFarms=mergeByUpdatedAt(farms,(rf.data||[]).map(dbToLocalFarm));
+    const mergedDays=mergeByUpdatedAt(days,(rd.data||[]).map(dbToLocalDay));
+
+    const [up,uf,ud]=await Promise.all([
+      mergedPrograms.length?sb.from("programs").upsert(mergedPrograms.map(localToDbProgram),{onConflict:"id"}):Promise.resolve({error:null}),
+      mergedFarms.length?sb.from("farms").upsert(mergedFarms.map(localToDbFarm),{onConflict:"id"}):Promise.resolve({error:null}),
+      mergedDays.length?sb.from("days").upsert(mergedDays.map(localToDbDay),{onConflict:"id"}):Promise.resolve({error:null})
+    ]);
+    for(const r of [up,uf,ud])if(r.error)throw r.error;
+
+    programs=mergedPrograms;farms=mergedFarms;days=mergedDays;
+    persistLocalOnly();
+    renderPrograms();renderFarms();renderResults();renderControls();
+    setCloudStatus("Synchronisé automatiquement.","sync-ok");
+  }catch(err){
+    console.error(err);
+    setCloudStatus("Synchronisation impossible : "+(err.message||err),"sync-error");
+  }finally{
+    syncing=false;
+    if(b)b.disabled=false;
+  }
+}
+
+async function initCloud(){
+  if(!cloudConfigured()){
+    setCloudStatus("Synchronisation : Publishable key Supabase non encore insérée.","sync-warn");
+    return;
+  }
+  if(!window.supabase){
+    setCloudStatus("Bibliothèque Supabase indisponible.","sync-error");
+    return;
+  }
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+  document.getElementById("syncBtn").disabled=false;
+  await syncNow();
+
+  // Synchronisation automatique périodique entre PC et smartphone.
+  autoPullTimer=setInterval(()=>syncNow(),5000);
+
+  // Synchroniser dès que l'application revient au premier plan ou retrouve Internet.
+  window.addEventListener("online",()=>syncNow());
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)syncNow()});
+}
+
 applyTheme(localStorage.getItem(THEME_K)||"light");dayDate.value=new Date().toISOString().slice(0,10);addControl();renderPrograms();renderFarms();renderResults();
+initCloud();
 
 let deferredInstallPrompt=null;
 window.addEventListener("beforeinstallprompt",(e)=>{
